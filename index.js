@@ -90,7 +90,7 @@ app.post("/webhook", async (req, res) => {
 
   if (quiereAsesor || (confirma && conv.estado === "ofreciendo_asesor")) {
     const saludo = conv.nombre ? `Perfecto ${conv.nombre}` : `Perfecto`;
-    const resumenFinal = conv.interes || "una propiedad en Medellin y alrededores";
+    const resumenFinal = "una propiedad en Medellin y alrededores";
     const msgAsesor = `${saludo}. Nuestro asesor se pondra en contacto contigo al ${userPhone} muy pronto. Si prefieres escribirle directamente hazlo al 3028536489indicando que buscas: ${resumenFinal}.`;
     await enviarMensaje(userPhone, msgAsesor);
     conv.estado = "transferido";
