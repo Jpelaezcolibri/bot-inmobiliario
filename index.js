@@ -147,4 +147,4 @@ Usa esta informacion: ${fichaPropiedad}`;
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.env.log(`Bot corriendo en puerto ${PORT}`));
+app.listen(PORT, () => console.log(`Bot corriendo en puerto ${PORT}`));
