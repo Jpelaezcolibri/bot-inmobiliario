@@ -86,18 +86,16 @@ app.post("/webhook", async (req, res) => {
 
   // Detectar si quiere hablar con asesor
   const quiereAsesor = /\b(asesor|humano|persona|hablar con alguien|comunicar|contacto|agente)\b/i.test(userText);
-  const confirma = /^(si|sí|yes|claro|dale|quiero|me interesa|perfecto|ok|okay)$/i.test(userText.toLowerCase());
+const confirma = /^(si|sí|yes|claro|dale|quiero|me interesa|perfecto|ok|okay)$/i.test(userText.toLowerCase());
 
-  if ((quiereAsesor || (confirma && conv.estado === "ofreciendo_asesor")) ) {
-    const resumen = conv.interes || "consulta general";
-    const nombre = conv.nombre || "Cliente";
-    const saludo = conv.nombre ? `Perfecto ${conv.nombre}` : `Perfecto`;
-    const resumenFinal = conv.interes !== "consulta general" ? conv.interes : userText;
-    const msgAsesor = `${saludo}. Nuestro asesor se pondra en contacto contigo al ${userPhone} muy pronto. Si prefieres escribirle directamente hazlo al 3218939542 indicando que buscas: ${resumenFinal}.`;
-    await enviarMensaje(userPhone, msgAsesor);
-    conv.estado = "transferido";
-    return;
-  }
+if (quiereAsesor || (confirma && conv.estado === "ofreciendo_asesor")) {
+  const saludo = conv.nombre ? `Perfecto ${conv.nombre}` : `Perfecto`;
+  const resumenFinal = conv.interes || conv.historial.filter(h => h.role === "user").map(h => h.content).join(", ");
+  const msgAsesor = `${saludo}. Nuestro asesor se pondra en contacto contigo al ${userPhone} muy pronto. Si prefieres escribirle directamente hazlo al 3218939542 indicando que buscas: ${resumenFinal}.`;
+  await enviarMensaje(userPhone, msgAsesor);
+  conv.estado = "transferido";
+  return;
+}
 
   const propiedades = await getPropiedades();
 
@@ -162,10 +160,8 @@ Ficha: Ref ${p.ref} | ${p.titulo} | Precio: ${p.precio} | ${p.zona}, ${p.ciudad}
   } else {
     conv.estado = "asesorando";
     systemPrompt = `Eres un asesor inmobiliario profesional en Colombia. 
-
 Catalogo disponible:
 ${catalogoDisponible}
-
 REGLAS IMPORTANTES:
 1. Responde en texto plano sin asteriscos sin guiones sin negritas sin emojis
 2. Maximo 3 oraciones
@@ -174,8 +170,20 @@ REGLAS IMPORTANTES:
 5. Si el usuario insiste en algo que no tienes di: "No tenemos esa opcion ahora pero nuestro asesor puede buscarte opciones personalizadas. Responde SI para que te contacte."
 6. Si el usuario dice SI despues de ofrecer asesor responde: "Perfecto. Nuestro asesor te contactara al [numero del usuario] muy pronto. Si prefieres escribirle directamente hazlo al 3218939542."
 7. Nunca dejes ir a un cliente sin ofrecerle una alternativa o el contacto del asesor
-8. Si el usuario da su nombre guardalo para personalizar la conversacion`;
+8. Si el usuario da su nombre guardalo para personalizar la conversacion
+9. Cuando recomiendes una propiedad especifica presenta SIEMPRE la ficha completa con este formato exacto en lineas separadas:
+[Titulo atractivo]
 
+Ubicacion: [zona y ciudad]
+Precio: [precio]
+Area: [area] | Hab: [num] | Banos: [num] | Garaje: [num]
+Estrato: [num] | Admon: [valor]
+
+[Descripcion en 2 oraciones]
+
+Ver fotos: [link]
+
+Para hablar con un asesor responde SI`;
     conv.estado = "ofreciendo_asesor";
   }
 
