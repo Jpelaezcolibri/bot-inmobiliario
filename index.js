@@ -91,7 +91,7 @@ app.post("/webhook", async (req, res) => {
   if (quiereAsesor || (confirma && conv.estado === "ofreciendo_asesor")) {
     const saludo = conv.nombre ? `Perfecto ${conv.nombre}` : `Perfecto`;
     const resumenFinal = "una propiedad en Medellin y alrededores";
-    const msgAsesor = `${saludo}. Nuestro asesor se pondra en contacto contigo al ${userPhone} muy pronto. Si prefieres escribirle directamente hazlo al 3028536489indicando que buscas: ${resumenFinal}.`;
+    const linkPropiedad = conv.linkUltima ? ` Propiedad de interes: ${conv.linkUltima}` : "";directamente hazlo al 3028536489indicando que buscas: ${resumenFinal}.`;
     await enviarMensaje(userPhone, msgAsesor);
     conv.estado = "transferido";
     return;
@@ -137,6 +137,7 @@ INSTRUCCIONES:
   } else if (propiedadEncontrada && propiedadEncontrada.disponible === "SI") {
     conv.estado = "ofreciendo_asesor";
     conv.interes = `propiedad ${propiedadEncontrada.ref} - ${propiedadEncontrada.titulo}`;
+    conv.linkUltima = propiedadEncontrada.link;
     const p = propiedadEncontrada;
     systemPrompt = `Eres un asesor inmobiliario profesional de Paraiso Inmobiliario en Colombia.
 Presenta esta propiedad usando EXACTAMENTE este formato con emojis suaves:
@@ -174,6 +175,8 @@ REGLAS IMPORTANTES:
 8. Si el usuario da su nombre usalo para personalizar la conversacion
 9. Cuando recomiendes una propiedad especifica presenta SIEMPRE la ficha completa con este formato:
 
+
+
 🏠 [Titulo atractivo]
 
 📍 Ubicacion: [zona y ciudad]
@@ -203,7 +206,15 @@ Para hablar con un asesor responde SI`;
   const reply = response.content[0].text;
   conv.historial.push({ role: "assistant", content: reply });
 
-  await enviarMensaje(userPhone, reply);
+// Detectar si Claude recomendo una propiedad y guardar su link
+for (const ref in propiedades) {
+  if (reply.includes(ref)) {
+    conv.linkUltima = propiedades[ref].link;
+    break;
+  }
+}
+
+await enviarMensaje(userPhone, reply);
 });
 
 const PORT = process.env.PORT || 3000;
