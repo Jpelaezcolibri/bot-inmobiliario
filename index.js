@@ -1,13 +1,29 @@
 const express = require("express");
 const Anthropic = require("@anthropic-ai/sdk");
 const { google } = require("googleapis");
+const fs = require("fs");
 
 const app = express();
 app.use(express.json());
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const conversaciones = {};
+const CONV_FILE = "/tmp/conversaciones.json";
+
+function cargarConversaciones() {
+  try {
+    if (fs.existsSync(CONV_FILE)) {
+      return JSON.parse(fs.readFileSync(CONV_FILE, "utf8"));
+    }
+  } catch (e) {}
+  return {};
+}
+
+function guardarConversaciones(data) {
+  try {
+    fs.writeFileSync(CONV_FILE, JSON.stringify(data), "utf8");
+  } catch (e) {}
+}
 
 async function getPropiedades() {
   const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
@@ -73,37 +89,52 @@ app.post("/webhook", async (req, res) => {
   const userText = message.text.body.trim();
   const userPhone = message.from;
 
+  const conversaciones = cargarConversaciones();
+
   if (!conversaciones[userPhone]) {
     conversaciones[userPhone] = {
       estado: "inicio",
       nombre: null,
       linkUltima: null,
-      historial: []
+      historial: [],
+      ultimaActividad: Date.now()
     };
   }
 
   const conv = conversaciones[userPhone];
+
+  // Resetear si lleva mas de 2 horas inactivo
+  if (Date.now() - conv.ultimaActividad > 2 * 60 * 60 * 1000) {
+    conversaciones[userPhone] = {
+      estado: "inicio",
+      nombre: null,
+      linkUltima: null,
+      historial: [],
+      ultimaActividad: Date.now()
+    };
+  }
+
+  conv.ultimaActividad = Date.now();
   conv.historial.push({ role: "user", content: userText });
 
   const quiereAsesor = /\b(asesor|humano|persona|hablar con alguien|comunicar|contacto|agente)\b/i.test(userText);
   const confirma = /^(si|sí|yes|claro|dale|quiero|me interesa|perfecto|ok|okay)$/i.test(userText.toLowerCase());
 
- if (quiereAsesor || (confirma && conv.estado === "ofreciendo_asesor")) {
+  if (quiereAsesor || (confirma && conv.estado === "ofreciendo_asesor")) {
     const saludo = conv.nombre ? `Perfecto ${conv.nombre}` : `Perfecto`;
-    const linkInfo = conv.linkUltima ? `&text=Hola,%20estoy%20interesado%20en%20esta%20propiedad:%20${encodeURIComponent(conv.linkUltima)}` : "";
-    const linkAsesor = `https://wa.me/573028536489${linkInfo}`;
-    
-    // Mensaje al usuario con link pre-cargado
+    const linkInfo = conv.linkUltima ? `&text=Hola,%20estoy%20interesado%20en%20esta%20propiedad:%20${encodeURIComponent(conv.linkUltima)}` : `&text=Hola,%20estoy%20interesado%20en%20una%20propiedad`;
+    const linkAsesor = `https://wa.me/573028536489?${linkInfo}`;
+
     const msgUsuario = `${saludo}! 😊 Haz clic aqui para hablar directamente con nuestro asesor, el ya tendra el contexto de tu consulta:\n${linkAsesor}`;
     await enviarMensaje(userPhone, msgUsuario);
 
-    // Alerta automatica al asesor
     const nombreCliente = conv.nombre || "Cliente";
     const propInfo = conv.linkUltima ? `\nPropiedad de interes: ${conv.linkUltima}` : "\nConsulta general";
     const msgParaAsesor = `Nuevo lead Paraiso Inmobiliario!\nCliente: ${nombreCliente}\nNumero: +${userPhone}${propInfo}\nContactar a la brevedad.`;
     await enviarMensaje("573028536489", msgParaAsesor);
 
     conv.estado = "transferido";
+    guardarConversaciones(conversaciones);
     return;
   }
 
@@ -220,6 +251,7 @@ Para hablar con un asesor responde SI`;
     }
   }
 
+  guardarConversaciones(conversaciones);
   await enviarMensaje(userPhone, reply);
 });
 
