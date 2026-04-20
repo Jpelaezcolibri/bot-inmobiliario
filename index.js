@@ -65,8 +65,10 @@ app.post("/webhook", async (req, res) => {
 
   const value = req.body?.entry?.[0]?.changes?.[0]?.value;
   const message = value?.messages?.[0];
-  if (!message || message.type !== "text") return;
   if (value?.statuses) return;
+  if (!message) return;
+  if (message.type !== "text") return;
+  if (!message.text?.body) return;
 
   const userText = message.text.body.trim();
   const userPhone = message.from;
