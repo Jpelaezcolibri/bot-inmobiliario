@@ -1,6 +1,6 @@
-const express = require("express");const Anthropic = require("@anthropic-ai/sdk");
+const express = require("express");
+const Anthropic = require("@anthropic-ai/sdk");
 const { google } = require("googleapis");
-
 
 const app = express();
 app.use(express.json());
@@ -77,7 +77,7 @@ app.post("/webhook", async (req, res) => {
     conversaciones[userPhone] = {
       estado: "inicio",
       nombre: null,
-      interes: null,
+      linkUltima: null,
       historial: []
     };
   }
@@ -90,15 +90,14 @@ app.post("/webhook", async (req, res) => {
 
   if (quiereAsesor || (confirma && conv.estado === "ofreciendo_asesor")) {
     const saludo = conv.nombre ? `Perfecto ${conv.nombre}` : `Perfecto`;
-    const resumenFinal = "una propiedad en Medellin y alrededores";
-    const linkPropiedad = conv.linkUltima ? ` Propiedad de interes: ${conv.linkUltima}` : "";directamente hazlo al 3028536489indicando que buscas: ${resumenFinal}.`;
+    const linkPropiedad = conv.linkUltima ? `\nPropiedad de interes: ${conv.linkUltima}` : "";
+    const msgAsesor = `${saludo}. Nuestro asesor se pondra en contacto contigo al ${userPhone} muy pronto. Si prefieres escribirle directamente al 3028536489 con gusto te ayuda.${linkPropiedad}`;
     await enviarMensaje(userPhone, msgAsesor);
     conv.estado = "transferido";
     return;
   }
 
   const propiedades = await getPropiedades();
-
   const disponibles = Object.values(propiedades).filter(p => p.disponible === "SI");
 
   const catalogoDisponible = disponibles.map(p =>
@@ -120,7 +119,7 @@ app.post("/webhook", async (req, res) => {
 
   if (propiedadEncontrada && propiedadEncontrada.disponible !== "SI") {
     conv.estado = "ofreciendo_asesor";
-    conv.interes = `propiedad ${propiedadEncontrada.ref} en ${propiedadEncontrada.zona}`;
+    conv.linkUltima = null;
     systemPrompt = `Eres un asesor inmobiliario profesional de Paraiso Inmobiliario en Colombia.
 La propiedad ${propiedadEncontrada.ref} NO esta disponible actualmente.
 Tienes estas propiedades disponibles:
@@ -130,13 +129,12 @@ INSTRUCCIONES:
 - Informa amablemente que esa propiedad no esta disponible
 - Ofrece la opcion mas similar del catalogo con su ficha completa
 - Pregunta si quiere que un asesor lo contacte cuando haya algo en esa zona
-- Usa emojis suaves para hacer el mensaje mas cercano
-- Responde en texto plano sin asteriscos sin guiones sin negritas
+- Usa emojis suaves
+- Sin asteriscos sin guiones sin negritas
 - Maximo 4 oraciones`;
 
   } else if (propiedadEncontrada && propiedadEncontrada.disponible === "SI") {
     conv.estado = "ofreciendo_asesor";
-    conv.interes = `propiedad ${propiedadEncontrada.ref} - ${propiedadEncontrada.titulo}`;
     conv.linkUltima = propiedadEncontrada.link;
     const p = propiedadEncontrada;
     systemPrompt = `Eres un asesor inmobiliario profesional de Paraiso Inmobiliario en Colombia.
@@ -153,7 +151,7 @@ Presenta esta propiedad usando EXACTAMENTE este formato con emojis suaves:
 
 📸 Ver fotos: ${p.link}
 
-Para hablar con un asesor responde SI o escribe al 3218939542
+Para hablar con un asesor responde SI o escribe al 3028536489
 
 Ficha: Ref ${p.ref} | ${p.titulo} | Precio: ${p.precio} | ${p.zona}, ${p.ciudad} | ${p.area} | ${p.habitaciones} hab | ${p.banos} ban | Garaje: ${p.garaje} | Estrato: ${p.estrato} | Admon: ${p.administracion} | ${p.descripcion} | ${p.caracteristicas} | Link: ${p.link}`;
 
@@ -174,8 +172,6 @@ REGLAS IMPORTANTES:
 7. Nunca dejes ir a un cliente sin ofrecerle una alternativa o el contacto del asesor
 8. Si el usuario da su nombre usalo para personalizar la conversacion
 9. Cuando recomiendes una propiedad especifica presenta SIEMPRE la ficha completa con este formato:
-
-
 
 🏠 [Titulo atractivo]
 
@@ -206,15 +202,15 @@ Para hablar con un asesor responde SI`;
   const reply = response.content[0].text;
   conv.historial.push({ role: "assistant", content: reply });
 
-// Detectar si Claude recomendo una propiedad y guardar su link
-for (const ref in propiedades) {
-  if (reply.includes(ref)) {
-    conv.linkUltima = propiedades[ref].link;
-    break;
+  // Detectar si Claude recomendo una propiedad y guardar su link
+  for (const ref in propiedades) {
+    if (reply.includes(ref) && propiedades[ref].link) {
+      conv.linkUltima = propiedades[ref].link;
+      break;
+    }
   }
-}
 
-await enviarMensaje(userPhone, reply);
+  await enviarMensaje(userPhone, reply);
 });
 
 const PORT = process.env.PORT || 3000;
