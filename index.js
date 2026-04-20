@@ -1,6 +1,6 @@
-const express = require("express");
-const Anthropic = require("@anthropic-ai/sdk");
+const express = require("express");const Anthropic = require("@anthropic-ai/sdk");
 const { google } = require("googleapis");
+
 
 const app = express();
 app.use(express.json());
@@ -91,7 +91,7 @@ app.post("/webhook", async (req, res) => {
   if (quiereAsesor || (confirma && conv.estado === "ofreciendo_asesor")) {
     const saludo = conv.nombre ? `Perfecto ${conv.nombre}` : `Perfecto`;
     const resumenFinal = conv.interes || "una propiedad en Medellin y alrededores";
-    const msgAsesor = `${saludo}. Nuestro asesor se pondra en contacto contigo al ${userPhone} muy pronto. Si prefieres escribirle directamente hazlo al 3218939542 indicando que buscas: ${resumenFinal}.`;
+    const msgAsesor = `${saludo}. Nuestro asesor se pondra en contacto contigo al ${userPhone} muy pronto. Si prefieres escribirle directamente hazlo al 3028536489indicando que buscas: ${resumenFinal}.`;
     await enviarMensaje(userPhone, msgAsesor);
     conv.estado = "transferido";
     return;
@@ -121,7 +121,7 @@ app.post("/webhook", async (req, res) => {
   if (propiedadEncontrada && propiedadEncontrada.disponible !== "SI") {
     conv.estado = "ofreciendo_asesor";
     conv.interes = `propiedad ${propiedadEncontrada.ref} en ${propiedadEncontrada.zona}`;
-    systemPrompt = `Eres un asesor inmobiliario profesional de Proyectos Siempre Real en Colombia.
+    systemPrompt = `Eres un asesor inmobiliario profesional de Paraiso Inmobiliario en Colombia.
 La propiedad ${propiedadEncontrada.ref} NO esta disponible actualmente.
 Tienes estas propiedades disponibles:
 ${catalogoDisponible}
@@ -138,7 +138,7 @@ INSTRUCCIONES:
     conv.estado = "ofreciendo_asesor";
     conv.interes = `propiedad ${propiedadEncontrada.ref} - ${propiedadEncontrada.titulo}`;
     const p = propiedadEncontrada;
-    systemPrompt = `Eres un asesor inmobiliario profesional de Proyectos Siempre Real en Colombia.
+    systemPrompt = `Eres un asesor inmobiliario profesional de Paraiso Inmobiliario en Colombia.
 Presenta esta propiedad usando EXACTAMENTE este formato con emojis suaves:
 
 🏠 [Titulo atractivo]
@@ -158,7 +158,7 @@ Ficha: Ref ${p.ref} | ${p.titulo} | Precio: ${p.precio} | ${p.zona}, ${p.ciudad}
 
   } else {
     conv.estado = "ofreciendo_asesor";
-    systemPrompt = `Eres un asesor inmobiliario profesional de Proyectos Siempre Real en Colombia.
+    systemPrompt = `Eres un asesor inmobiliario profesional de Paraiso Inmobiliario en Colombia.
 
 Catalogo disponible:
 ${catalogoDisponible}
