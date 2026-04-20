@@ -71,7 +71,6 @@ app.post("/webhook", async (req, res) => {
   const userText = message.text.body.trim();
   const userPhone = message.from;
 
-  // Inicializar conversacion si no existe
   if (!conversaciones[userPhone]) {
     conversaciones[userPhone] = {
       estado: "inicio",
@@ -84,29 +83,29 @@ app.post("/webhook", async (req, res) => {
   const conv = conversaciones[userPhone];
   conv.historial.push({ role: "user", content: userText });
 
-  // Detectar si quiere hablar con asesor
   const quiereAsesor = /\b(asesor|humano|persona|hablar con alguien|comunicar|contacto|agente)\b/i.test(userText);
-const confirma = /^(si|sí|yes|claro|dale|quiero|me interesa|perfecto|ok|okay)$/i.test(userText.toLowerCase());
+  const confirma = /^(si|sí|yes|claro|dale|quiero|me interesa|perfecto|ok|okay)$/i.test(userText.toLowerCase());
 
-if (quiereAsesor || (confirma && conv.estado === "ofreciendo_asesor")) {
-  const saludo = conv.nombre ? `Perfecto ${conv.nombre}` : `Perfecto`;
-  const resumenFinal = conv.interes || conv.historial.filter(h => h.role === "user").map(h => h.content).join(", ");
-  const msgAsesor = `${saludo}. Nuestro asesor se pondra en contacto contigo al ${userPhone} muy pronto. Si prefieres escribirle directamente hazlo al 3218939542 indicando que buscas: ${resumenFinal}.`;
-  await enviarMensaje(userPhone, msgAsesor);
-  conv.estado = "transferido";
-  return;
-}
+  if (quiereAsesor || (confirma && conv.estado === "ofreciendo_asesor")) {
+    const saludo = conv.nombre ? `Perfecto ${conv.nombre}` : `Perfecto`;
+    const resumenFinal = conv.interes || conv.historial.filter(h => h.role === "user").map(h => h.content).join(", ");
+    const msgAsesor = `${saludo}. Nuestro asesor se pondra en contacto contigo al ${userPhone} muy pronto. Si prefieres escribirle directamente hazlo al 3218939542 indicando que buscas: ${resumenFinal}.`;
+    await enviarMensaje(userPhone, msgAsesor);
+    conv.estado = "transferido";
+    return;
+  }
 
   const propiedades = await getPropiedades();
 
   const disponibles = Object.values(propiedades).filter(p => p.disponible === "SI");
-  const noDisponibles = Object.values(propiedades).filter(p => p.disponible !== "SI");
 
   const catalogoDisponible = disponibles.map(p =>
-    `Ref ${p.ref}: ${p.titulo} | ${p.tipo} | ${p.precio} | ${p.area} | ${p.habitaciones} hab | ${p.banos} ban | Garaje: ${p.garaje} | Estrato ${p.estrato} | Admon: ${p.administracion} | ${p.zona}, ${p.ciudad}`
+    `Ref ${p.ref}: ${p.titulo} | ${p.tipo} | ${p.precio} | ${p.area} | ${p.habitaciones} hab | ${p.banos} ban | Garaje: ${p.garaje} | Estrato ${p.estrato} | Admon: ${p.administracion} | ${p.zona}, ${p.ciudad} | Link: ${p.link}`
   ).join("\n");
 
-  // Buscar propiedad especifica por ref
+  const nombreMatch = userText.match(/(?:me llamo|soy|mi nombre es)\s+([A-Za-zÁáÉéÍíÓóÚú]+)/i);
+  if (nombreMatch) conv.nombre = nombreMatch[1];
+
   let propiedadEncontrada = null;
   for (const ref in propiedades) {
     if (userText.includes(ref)) {
@@ -115,76 +114,76 @@ if (quiereAsesor || (confirma && conv.estado === "ofreciendo_asesor")) {
     }
   }
 
-  // Extraer nombre del usuario si lo menciona
-  const nombreMatch = userText.match(/(?:me llamo|soy|mi nombre es)\s+([A-Za-zÁáÉéÍíÓóÚú]+)/i);
-  if (nombreMatch) conv.nombre = nombreMatch[1];
-
   let systemPrompt;
 
   if (propiedadEncontrada && propiedadEncontrada.disponible !== "SI") {
     conv.estado = "ofreciendo_asesor";
     conv.interes = `propiedad ${propiedadEncontrada.ref} en ${propiedadEncontrada.zona}`;
-    systemPrompt = `Eres un asesor inmobiliario profesional en Colombia. 
+    systemPrompt = `Eres un asesor inmobiliario profesional de Proyectos Siempre Real en Colombia.
 La propiedad ${propiedadEncontrada.ref} NO esta disponible actualmente.
 Tienes estas propiedades disponibles:
 ${catalogoDisponible}
 
 INSTRUCCIONES:
-- Informa que esa propiedad no esta disponible
-- Ofrece la opcion mas similar del catalogo disponible
+- Informa amablemente que esa propiedad no esta disponible
+- Ofrece la opcion mas similar del catalogo con su ficha completa
 - Pregunta si quiere que un asesor lo contacte cuando haya algo en esa zona
-- Responde en texto plano sin asteriscos sin guiones sin negritas sin emojis
-- Maximo 3 oraciones`;
+- Usa emojis suaves para hacer el mensaje mas cercano
+- Responde en texto plano sin asteriscos sin guiones sin negritas
+- Maximo 4 oraciones`;
 
   } else if (propiedadEncontrada && propiedadEncontrada.disponible === "SI") {
     conv.estado = "ofreciendo_asesor";
     conv.interes = `propiedad ${propiedadEncontrada.ref} - ${propiedadEncontrada.titulo}`;
     const p = propiedadEncontrada;
-    systemPrompt = `Eres un asesor inmobiliario profesional en Colombia. Presenta esta propiedad usando EXACTAMENTE este formato sin asteriscos sin guiones sin negritas sin emojis:
+    systemPrompt = `Eres un asesor inmobiliario profesional de Proyectos Siempre Real en Colombia.
+Presenta esta propiedad usando EXACTAMENTE este formato con emojis suaves:
 
-[Titulo atractivo en una linea]
+🏠 [Titulo atractivo]
 
-Ubicacion: [zona y ciudad]
-Precio: [precio]
-Area: [area] | Hab: [num] | Banos: [num] | Garaje: [num]
-Estrato: [num] | Admon: [valor]
+📍 Ubicacion: [zona y ciudad]
+💰 Precio: [precio]
+📐 Area: [area] | 🛏 Hab: [num] | 🚿 Banos: [num] | 🚗 Garaje: [num]
+⭐ Estrato: [num] | 🏢 Admon: [valor]
 
 [Descripcion atractiva en 2 oraciones]
 
-Ver fotos: [link]
+📸 Ver fotos: ${p.link}
 
 Para hablar con un asesor responde SI o escribe al 3218939542
 
 Ficha: Ref ${p.ref} | ${p.titulo} | Precio: ${p.precio} | ${p.zona}, ${p.ciudad} | ${p.area} | ${p.habitaciones} hab | ${p.banos} ban | Garaje: ${p.garaje} | Estrato: ${p.estrato} | Admon: ${p.administracion} | ${p.descripcion} | ${p.caracteristicas} | Link: ${p.link}`;
 
   } else {
-    conv.estado = "asesorando";
-    systemPrompt = `Eres un asesor inmobiliario profesional en Colombia. 
+    conv.estado = "ofreciendo_asesor";
+    systemPrompt = `Eres un asesor inmobiliario profesional de Proyectos Siempre Real en Colombia.
+
 Catalogo disponible:
 ${catalogoDisponible}
-REGLAS IMPORTANTES:
-1. Responde en texto plano sin asteriscos sin guiones sin negritas sin emojis
-2. Maximo 3 oraciones
-3. Si el usuario describe lo que busca recomienda la propiedad mas cercana del catalogo mencionando su referencia
-4. Si no hay nada exacto ofrece la opcion mas similar y di que puedes avisarle cuando haya algo que encaje mejor
-5. Si el usuario insiste en algo que no tienes di: "No tenemos esa opcion ahora pero nuestro asesor puede buscarte opciones personalizadas. Responde SI para que te contacte."
-6. Si el usuario dice SI despues de ofrecer asesor responde: "Perfecto. Nuestro asesor te contactara al [numero del usuario] muy pronto. Si prefieres escribirle directamente hazlo al 3218939542."
-7. Nunca dejes ir a un cliente sin ofrecerle una alternativa o el contacto del asesor
-8. Si el usuario da su nombre guardalo para personalizar la conversacion
-9. Cuando recomiendes una propiedad especifica presenta SIEMPRE la ficha completa con este formato exacto en lineas separadas:
-[Titulo atractivo]
 
-Ubicacion: [zona y ciudad]
-Precio: [precio]
-Area: [area] | Hab: [num] | Banos: [num] | Garaje: [num]
-Estrato: [num] | Admon: [valor]
+REGLAS IMPORTANTES:
+1. Usa emojis suaves para hacer el mensaje mas cercano y personal
+2. Responde sin asteriscos sin guiones sin negritas
+3. Maximo 3 oraciones salvo cuando presentes una ficha completa
+4. Si el usuario describe lo que busca recomienda la propiedad mas cercana del catalogo mencionando su referencia
+5. Si no hay nada exacto ofrece la opcion mas similar y di que puedes avisarle cuando haya algo que encaje mejor
+6. Si el usuario insiste en algo que no tienes di: "No tenemos esa opcion ahora pero nuestro asesor puede buscarte opciones personalizadas. Responde SI para que te contacte."
+7. Nunca dejes ir a un cliente sin ofrecerle una alternativa o el contacto del asesor
+8. Si el usuario da su nombre usalo para personalizar la conversacion
+9. Cuando recomiendes una propiedad especifica presenta SIEMPRE la ficha completa con este formato:
+
+🏠 [Titulo atractivo]
+
+📍 Ubicacion: [zona y ciudad]
+💰 Precio: [precio]
+📐 Area: [area] | 🛏 Hab: [num] | 🚿 Banos: [num] | 🚗 Garaje: [num]
+⭐ Estrato: [num] | 🏢 Admon: [valor]
 
 [Descripcion en 2 oraciones]
 
-Ver fotos: [link]
+📸 Ver fotos: [link exacto del catalogo]
 
 Para hablar con un asesor responde SI`;
-    conv.estado = "ofreciendo_asesor";
   }
 
   const historialClaude = conv.historial.slice(-6).map(h => ({
