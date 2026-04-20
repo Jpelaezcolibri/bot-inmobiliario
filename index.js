@@ -21,7 +21,7 @@ const propiedades = {
     garaje: 1,
     estrato: 4,
     administracion: "$290.000 COP/mes",
-    descripcion: "Apartamento muy iluminado con vista a zona verde, cerca del parque principal. Porteria 24 horas, gimnasio, piscina, zona humeda y parque infantil. Facil acceso a transporte publico y centros comerciales.",
+    descripcion: "Apartamento muy iluminado con vista a zona verde, cerca del parque principal. Porteria 24 horas, gimnasio, piscina, zona humeda y parque infantil.",
     caracteristicas: "Admite mascotas, balcon, cocina integral, calentador, closets, ascensor, gimnasio, piscina",
     link: "https://info.wasi.co/apartamento-venta-el-carmelo-sabaneta/9755676"
   }
@@ -52,13 +52,19 @@ app.post("/webhook", async (req, res) => {
   const userText = message.text.body.trim().toLowerCase();
   const userPhone = message.from;
 
-  // Transferir a agente humano
-  if (conversaciones[userPhone] === "esperando_confirmacion" && 
+  // Transferir a agente humano con contexto completo
+  if (conversaciones[userPhone]?.estado === "esperando_confirmacion" &&
       (userText === "si" || userText === "sí" || userText === "yes")) {
-    
-    conversaciones[userPhone] = "transferido";
-    const transferMsg = "Perfecto. Te conecto ahora con uno de nuestros asesores. Puedes escribirle directamente por WhatsApp al numero https://wa.me/573218939542 y el te ayudara con todos los detalles.";
-    
+
+    const p = conversaciones[userPhone].propiedad;
+    const mensajeAsesor = `Hola, vengo del bot inmobiliario y estoy interesado en una propiedad. Estos son mis datos:%0A%0APropiedad consultada: ${p.titulo}%0ARef: ${p.ref}%0APrecio: ${p.precio}%0AUbicacion: ${p.zona}, ${p.ciudad}%0AArea: ${p.area} | Hab: ${p.habitaciones} | Banos: ${p.banos}%0AEstrato: ${p.estrato} | Admon: ${p.administracion}%0A%0AMi numero: ${userPhone}%0A%0APor favor contactarme para mas informacion.`;
+
+    const linkAsesor = `https://wa.me/573218939542?text=${mensajeAsesor}`;
+
+    const transferMsg = `Perfecto. Haz clic en este link para hablar directamente con nuestro asesor. El ya tendra toda la informacion de tu consulta lista: ${linkAsesor}`;
+
+    conversaciones[userPhone].estado = "transferido";
+
     await fetch(`https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_ID}/messages`, {
       method: "POST",
       headers: {
@@ -77,12 +83,12 @@ app.post("/webhook", async (req, res) => {
 
   // Buscar referencia de propiedad
   let fichaPropiedad = "";
-  let refEncontrada = "";
+  let propiedadEncontrada = null;
+
   for (const ref in propiedades) {
     if (message.text.body.includes(ref)) {
-      const p = propiedades[ref];
-      fichaPropiedad = `FICHA: Ref ${p.ref} | ${p.titulo} | ${p.tipo} en ${p.negocio} | Precio: ${p.precio} | Ubicacion: ${p.zona}, ${p.ciudad} | Area: ${p.area} | Habitaciones: ${p.habitaciones} | Banos: ${p.banos} | Garaje: ${p.garaje} | Estrato: ${p.estrato} | Administracion: ${p.administracion} | Caracteristicas: ${p.caracteristicas} | Descripcion: ${p.descripcion} | Link: ${p.link}`;
-      refEncontrada = ref;
+      propiedadEncontrada = propiedades[ref];
+      fichaPropiedad = `FICHA: Ref ${propiedadEncontrada.ref} | ${propiedadEncontrada.titulo} | ${propiedadEncontrada.tipo} en ${propiedadEncontrada.negocio} | Precio: ${propiedadEncontrada.precio} | Ubicacion: ${propiedadEncontrada.zona}, ${propiedadEncontrada.ciudad} | Area: ${propiedadEncontrada.area} | Habitaciones: ${propiedadEncontrada.habitaciones} | Banos: ${propiedadEncontrada.banos} | Garaje: ${propiedadEncontrada.garaje} | Estrato: ${propiedadEncontrada.estrato} | Administracion: ${propiedadEncontrada.administracion} | Caracteristicas: ${propiedadEncontrada.caracteristicas} | Descripcion: ${propiedadEncontrada.descripcion} | Link: ${propiedadEncontrada.link}`;
       break;
     }
   }
@@ -90,15 +96,19 @@ app.post("/webhook", async (req, res) => {
   let systemPrompt;
 
   if (fichaPropiedad) {
-    conversaciones[userPhone] = "esperando_confirmacion";
-    systemPrompt = `Eres un asesor inmobiliario profesional en Colombia. Presenta esta propiedad de forma atractiva usando EXACTAMENTE este formato en texto plano sin emojis:
+    conversaciones[userPhone] = {
+      estado: "esperando_confirmacion",
+      propiedad: propiedadEncontrada
+    };
+
+    systemPrompt = `Eres un asesor inmobiliario profesional en Colombia. Presenta esta propiedad usando EXACTAMENTE este formato en texto plano sin emojis:
 
 "[Titulo atractivo de una linea]
 
 Ubicacion: [zona y ciudad]
 Precio: [precio]
 Area: [area] | Hab: [num] | Banos: [num] | Garaje: [si/no]
-Estrato: [num] | Admon: [valor]
+Estrato: [num] | Admon: [valor mes]
 
 [Descripcion atractiva en 2 oraciones]
 
@@ -107,8 +117,9 @@ Ver fotos: [link]
 Te gustaria hablar con un asesor para mas informacion? Responde SI"
 
 Usa esta informacion: ${fichaPropiedad}`;
+
   } else {
-    systemPrompt = `Eres un asesor inmobiliario profesional en Colombia. Responde en texto plano sin emojis ni saltos de linea. Maximo 2 oraciones. Si preguntan por una propiedad, pideles la referencia del anuncio.`;
+    systemPrompt = `Eres un asesor inmobiliario profesional en Colombia. Responde en texto plano sin emojis ni saltos de linea. Maximo 2 oraciones. Si preguntan por una propiedad pideles la referencia del anuncio.`;
   }
 
   const response = await client.messages.create({
@@ -136,4 +147,4 @@ Usa esta informacion: ${fichaPropiedad}`;
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Bot corriendo en puerto ${PORT}`));
+app.listen(PORT, () => console.env.log(`Bot corriendo en puerto ${PORT}`));
