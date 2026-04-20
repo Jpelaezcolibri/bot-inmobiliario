@@ -88,11 +88,21 @@ app.post("/webhook", async (req, res) => {
   const quiereAsesor = /\b(asesor|humano|persona|hablar con alguien|comunicar|contacto|agente)\b/i.test(userText);
   const confirma = /^(si|sí|yes|claro|dale|quiero|me interesa|perfecto|ok|okay)$/i.test(userText.toLowerCase());
 
-  if (quiereAsesor || (confirma && conv.estado === "ofreciendo_asesor")) {
+ if (quiereAsesor || (confirma && conv.estado === "ofreciendo_asesor")) {
     const saludo = conv.nombre ? `Perfecto ${conv.nombre}` : `Perfecto`;
-    const linkPropiedad = conv.linkUltima ? `\nPropiedad de interes: ${conv.linkUltima}` : "";
-    const msgAsesor = `${saludo}. Nuestro asesor se pondra en contacto contigo al ${userPhone} muy pronto. Si prefieres escribirle directamente al 3028536489 con gusto te ayuda.${linkPropiedad}`;
-    await enviarMensaje(userPhone, msgAsesor);
+    const linkInfo = conv.linkUltima ? `&text=Hola,%20estoy%20interesado%20en%20esta%20propiedad:%20${encodeURIComponent(conv.linkUltima)}` : "";
+    const linkAsesor = `https://wa.me/573028536489${linkInfo}`;
+    
+    // Mensaje al usuario con link pre-cargado
+    const msgUsuario = `${saludo}! 😊 Haz clic aqui para hablar directamente con nuestro asesor, el ya tendra el contexto de tu consulta:\n${linkAsesor}`;
+    await enviarMensaje(userPhone, msgUsuario);
+
+    // Alerta automatica al asesor
+    const nombreCliente = conv.nombre || "Cliente";
+    const propInfo = conv.linkUltima ? `\nPropiedad de interes: ${conv.linkUltima}` : "\nConsulta general";
+    const msgParaAsesor = `Nuevo lead Paraiso Inmobiliario!\nCliente: ${nombreCliente}\nNumero: +${userPhone}${propInfo}\nContactar a la brevedad.`;
+    await enviarMensaje("573028536489", msgParaAsesor);
+
     conv.estado = "transferido";
     return;
   }
